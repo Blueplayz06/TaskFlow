@@ -1,0 +1,13 @@
+# Lightweight dev image — just runs Vite dev server with HMR
+FROM node:20-alpine
+WORKDIR /app
+
+# Install deps first (layer cache)
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

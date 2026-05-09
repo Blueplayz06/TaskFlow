@@ -1,0 +1,78 @@
+version: '3.9'
+
+services:
+
+  # ── PostgreSQL Database ─────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskflow_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       taskflow
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d taskflow']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskflow_net
+
+  # ── Backend API ─────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskflow_api
+    restart: unless-stopped
+    environment:
+      NODE_ENV:     development
+      PORT:         4000
+      DB_HOST:      postgres        # ← service name, not localhost
+      DB_PORT:      5432
+      DB_NAME:      taskflow
+      DB_USER:      postgres
+      DB_PASSWORD:  postgres
+      JWT_SECRET:   super_secret_dev_key_change_in_production
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN:  http://localhost:3000
+    ports:
+      - '4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy  # waits for DB to be ready
+    volumes:
+      - ./backend/src:/app/src      # hot-reload in dev
+    networks:
+      - taskflow_net
+
+  # ── Frontend ────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskflow_web
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:4000/api
+    ports:
+      - '3000:80'
+    depends_on:
+      - backend
+    networks:
+      - taskflow_net
+
+# ── Named volumes ───────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+
+# ── Network ─────────────────────────────────────────────────
+networks:
+  taskflow_net:
+    driver: bridge

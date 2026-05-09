@@ -1,0 +1,68 @@
+version: '3.9'
+
+# ── Production Docker Compose ───────────────────────────────
+# Used on EC2 — pulls images from Docker Hub instead of building locally
+# Run: docker compose -f docker-compose.prod.yml up -d
+
+services:
+
+  # ── Backend API ─────────────────────────────────────────
+  backend:
+    image: devansh2121/taskflow-backend:latest
+    container_name: taskflow_api
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT:     4000
+    ports:
+      - '4000:4000'
+    depends_on:
+      - postgres
+    networks:
+      - taskflow_net
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:4000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Frontend ────────────────────────────────────────────
+  frontend:
+    image: devansh2121/taskflow-frontend:latest
+    container_name: taskflow_web
+    restart: unless-stopped
+    ports:
+      - '80:80'
+    depends_on:
+      - backend
+    networks:
+      - taskflow_net
+
+  # ── PostgreSQL ──────────────────────────────────────────
+  # NOTE: In production use AWS RDS instead of this container.
+  # This is a fallback for testing on EC2 without RDS.
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskflow_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       taskflow
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - taskflow_net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d taskflow']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  taskflow_net:
+    driver: bridge
