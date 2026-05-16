@@ -116,3 +116,5 @@ GET    /health
 - [x] Step 3 — Docker + Docker Compose
 - [ ] Step 4 — GitHub Actions CI/CD pipeline
 - [ ] Step 5 — AWS EC2 + RDS + S3/CloudFront deployment
+
+## Deployed to AWS EC2
