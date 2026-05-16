@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { getProjects } from './api/client';
 import Board    from './components/Board';
 import Sidebar  from './components/Sidebar';
 import Topbar   from './components/Topbar';
@@ -21,16 +21,42 @@ function PrivateRoute({ children }) {
 
 // ── Main app shell (authenticated)
 function AppShell() {
-  const [activeNav, setActiveNav] = useState('board');
-  const PROJECT_ID = 2; // hardcoded for MVP; swap with project selector later
+  const { user } = useAuth();
+  const [activeNav, setActiveNav]       = useState('board');
+  const [projectId, setProjectId]       = useState(null);
+  const [projectName, setProjectName]   = useState('My Project');
+  const [loading, setLoading]           = useState(true);
+
+  useEffect(() => {
+    getProjects()
+      .then((res) => {
+        if (res.data.length > 0) {
+          setProjectId(res.data[0].id);
+          setProjectName(res.data[0].name);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <div className="flex flex-col min-h-screen bg-[#0f0f13] text-white">
-      <Topbar title="Dev Sprint #4" subtitle="12 tasks · Due Jul 28" />
+      <Topbar title={projectName} subtitle="Due Jul 28" />
       <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
         <Sidebar activeNav={activeNav} onNavChange={setActiveNav} />
         <main className="flex-1 flex flex-col overflow-hidden">
-          {activeNav === 'board' && <Board projectId={PROJECT_ID} />}
+          {activeNav === 'board' && projectId && <Board projectId={projectId} />}
+          {activeNav === 'board' && !projectId && (
+            <div className="flex-1 flex items-center justify-center text-[#5a5a72] text-sm">
+              No projects found. Create one to get started.
+            </div>
+          )}
           {activeNav !== 'board' && (
             <div className="flex-1 flex items-center justify-center text-[#5a5a72] text-sm">
               {activeNav.charAt(0).toUpperCase() + activeNav.slice(1)} — coming in a future step
@@ -57,7 +83,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-
-
-
-
