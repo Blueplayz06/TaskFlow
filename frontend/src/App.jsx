@@ -5,31 +5,32 @@ import { getProjects } from './api/client';
 import Board    from './components/Board';
 import Sidebar  from './components/Sidebar';
 import Topbar   from './components/Topbar';
+import MyTasks  from './pages/MyTasks';
 import Login    from './pages/Login';
 import Register from './pages/Register';
 
-// ── Route guard
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (
-    <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center">
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );
   return user ? children : <Navigate to="/login" replace />;
 }
 
-// ── Main app shell (authenticated)
 function AppShell() {
   const { user } = useAuth();
-  const [activeNav, setActiveNav]       = useState('board');
-  const [projectId, setProjectId]       = useState(null);
-  const [projectName, setProjectName]   = useState('My Project');
-  const [loading, setLoading]           = useState(true);
+  const [activeNav, setActiveNav]     = useState('board');
+  const [projects, setProjects]       = useState([]);
+  const [projectId, setProjectId]     = useState(null);
+  const [projectName, setProjectName] = useState('My Project');
+  const [loading, setLoading]         = useState(true);
 
   useEffect(() => {
     getProjects()
       .then((res) => {
+        setProjects(res.data);
         if (res.data.length > 0) {
           setProjectId(res.data[0].id);
           setProjectName(res.data[0].name);
@@ -39,17 +40,29 @@ function AppShell() {
       .finally(() => setLoading(false));
   }, [user]);
 
+  const handleProjectChange = (id, name) => {
+    setProjectId(id);
+    setProjectName(name);
+    setActiveNav('board');
+  };
+
   if (loading) return (
-    <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center">
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0f0f13] text-white">
-      <Topbar title={projectName} subtitle="Due Jul 28" />
+    <div className="flex flex-col min-h-screen bg-[#0a0a0f] text-white">
+      <Topbar title={projectName} subtitle="" />
       <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
-        <Sidebar activeNav={activeNav} onNavChange={setActiveNav} />
+        <Sidebar
+          activeNav={activeNav}
+          onNavChange={setActiveNav}
+          projects={projects}
+          activeProject={projectId}
+          onProjectChange={handleProjectChange}
+        />
         <main className="flex-1 flex flex-col overflow-hidden">
           {activeNav === 'board' && projectId && <Board projectId={projectId} />}
           {activeNav === 'board' && !projectId && (
@@ -57,9 +70,15 @@ function AppShell() {
               No projects found. Create one to get started.
             </div>
           )}
-          {activeNav !== 'board' && (
+          {activeNav === 'mytasks' && <MyTasks projectId={projectId} />}
+          {activeNav === 'timeline' && (
             <div className="flex-1 flex items-center justify-center text-[#5a5a72] text-sm">
-              {activeNav.charAt(0).toUpperCase() + activeNav.slice(1)} — coming in a future step
+              Timeline — coming soon
+            </div>
+          )}
+          {activeNav === 'reports' && (
+            <div className="flex-1 flex items-center justify-center text-[#5a5a72] text-sm">
+              Reports — coming soon
             </div>
           )}
         </main>
@@ -75,9 +94,7 @@ export default function App() {
         <Routes>
           <Route path="/login"    element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/*"        element={
-            <PrivateRoute><AppShell /></PrivateRoute>
-          } />
+          <Route path="/*"        element={<PrivateRoute><AppShell /></PrivateRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
