@@ -6,15 +6,13 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+ENV VITE_API_URL=http://13.233.198.65:4000/api
+RUN node node_modules/vite/bin/vite.js build
 
 # ── Stage 2: Serve with Nginx
 FROM nginx:alpine AS runner
 
-# Copy built React app
 COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Nginx config for SPA routing
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
