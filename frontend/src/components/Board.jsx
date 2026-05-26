@@ -1,217 +1,331 @@
-import React from 'react';
-import { useState, useMemo } from 'react';
-import {
-  DndContext,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-  closestCorners,
-} from '@dnd-kit/core';
-import { sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable';
-import Column    from './Column';
-import TaskCard  from './TaskCard';
-import TaskModal from './TaskModal';
-import { useTasks } from '../hooks/useTasks';
+import { useState, useEffect, useRef, useCallback } from "react";
+import api from "../api/client";
+import TaskModal from "./TaskModal";
 
-const COLUMNS = ['backlog', 'todo', 'inprogress', 'review', 'done'];
-
-const PRIORITY_FILTER_OPTIONS = [
-  { value: 'all',    label: 'All'        },
-  { value: 'high',   label: 'High'       },
-  { value: 'medium', label: 'Medium'     },
-  { value: 'low',    label: 'Low'        },
+// ─── constants ────────────────────────────────────────────────────────────────
+const COLUMNS = [
+  { key: "todo", label: "To do" },
+  { key: "inprogress", label: "In progress" },
+  { key: "review", label: "Review" },
+  { key: "done", label: "Done" },
 ];
 
-export default function Board({ projectId }) {
-  const { tasks, loading, error, addTask, editTask, removeTask, moveTask } = useTasks(projectId);
+const TAG_COLORS = {
+  bug: { bg: "#FCEBEB", tc: "#791F1F" },
+  feature: { bg: "#E6F1FB", tc: "#0C447C" },
+  ui: { bg: "#EEEDFE", tc: "#3C3489" },
+  api: { bg: "#E1F5EE", tc: "#085041" },
+  design: { bg: "#FAEEDA", tc: "#633806" },
+};
 
-  const [activeTask,    setActiveTask]    = useState(null);
-  const [modalOpen,     setModalOpen]     = useState(false);
-  const [editingTask,   setEditingTask]   = useState(null);
-  const [defaultStatus, setDefaultStatus] = useState('todo');
-  const [filter,        setFilter]        = useState('all');
-  const [search,        setSearch]        = useState('');
+const AVATAR_COLORS = [
+  { bg: "#E6F1FB", tc: "#0C447C" },
+  { bg: "#EAF3DE", tc: "#27500A" },
+  { bg: "#FAEEDA", tc: "#633806" },
+  { bg: "#FBEAF0", tc: "#72243E" },
+  { bg: "#EEEDFE", tc: "#3C3489" },
+];
 
-  // ── Sensors (pointer + keyboard)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+// ─── helpers ──────────────────────────────────────────────────────────────────
+function avatarColor(name = "") {
+  const idx = name.charCodeAt(0) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[idx];
+}
 
-  // ── Filtered tasks
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
-      const matchPriority = filter === 'all' || t.priority === filter;
-      const q = search.toLowerCase();
-      const matchSearch = !q || t.title.toLowerCase().includes(q) || t.tag?.toLowerCase().includes(q);
-      return matchPriority && matchSearch;
-    });
-  }, [tasks, filter, search]);
+function initials(name = "") {
+  return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+}
 
-  const tasksByCol = useMemo(() => {
-    const map = {};
-    COLUMNS.forEach((c) => { map[c] = []; });
-    filteredTasks.forEach((t) => {
-      if (map[t.status]) map[t.status].push(t);
-    });
-    // sort each column by sort_order
-    COLUMNS.forEach((c) => map[c].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
-    return map;
-  }, [filteredTasks]);
+function normalizeStatus(s = "") {
+  const m = s.toLowerCase().replace(/[_\s]/g, "");
+  if (m === "inprogress" || m === "in_progress") return "inprogress";
+  if (m === "done" || m === "complete" || m === "completed") return "done";
+  if (m === "review" || m === "inreview") return "review";
+  return "todo";
+}
 
-  // ── Stats
-  const stats = useMemo(() => ({
-    total:    tasks.length,
-    progress: tasks.filter((t) => t.status === 'inprogress').length,
-    done:     tasks.filter((t) => t.status === 'done').length,
-    high:     tasks.filter((t) => t.priority === 'high').length,
-  }), [tasks]);
-
-  // ── DnD handlers
-  function handleDragStart({ active }) {
-    setActiveTask(tasks.find((t) => t.id === active.id) || null);
-  }
-
-  function handleDragOver({ active, over }) {
-    if (!over) return;
-    const fromCol = active.data.current?.sortable?.containerId;
-    const toCol   = over.data.current?.sortable?.containerId ?? over.id;
-    if (!fromCol || fromCol === toCol) return;
-    moveTask(active.id, toCol, over.id === toCol ? 0 : tasks.findIndex((t) => t.id === over.id));
-  }
-
-  function handleDragEnd({ active, over }) {
-    setActiveTask(null);
-    if (!over || active.id === over.id) return;
-    const fromCol = active.data.current?.sortable?.containerId;
-    const toCol   = over.data.current?.sortable?.containerId ?? over.id;
-    if (!fromCol) return;
-    const colTasks = tasksByCol[toCol];
-    const oldIdx = colTasks.findIndex((t) => t.id === active.id);
-    const newIdx = colTasks.findIndex((t) => t.id === over.id);
-    if (oldIdx !== -1 && newIdx !== -1) {
-      const reordered = arrayMove(colTasks, oldIdx, newIdx);
-      reordered.forEach((t, i) => moveTask(t.id, toCol, i));
-    }
-  }
-
-  // ── Modal helpers
-  const openCreate = (status = 'todo') => {
-    setEditingTask(null);
-    setDefaultStatus(status);
-    setModalOpen(true);
-  };
-  const openEdit = (task) => { setEditingTask(task); setModalOpen(true); };
-  const handleSave = (form) => editingTask ? editTask(editingTask.id, form) : addTask(form);
-  const handleDelete = (id) => { if (window.confirm('Delete this task?')) removeTask(id); };
-
-  if (loading) return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
-  if (error) return (
-    <div className="flex-1 flex items-center justify-center text-red-400 text-sm">{error}</div>
-  );
+// ─── TaskCard ─────────────────────────────────────────────────────────────────
+function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
+  const tag = TAG_COLORS[task.tag?.toLowerCase()] || TAG_COLORS.feature;
+  const av = avatarColor(task.assignee);
 
   return (
-    <>
-      {/* ── Stats row ── */}
-      <div className="flex gap-3 px-6 pt-5 pb-1">
-        {[
-          { num: stats.total,    label: 'Total tasks',  color: '#9090a8' },
-          { num: stats.progress, label: 'In progress',  color: '#7c6ff7' },
-          { num: stats.done,     label: 'Completed',    color: '#22c988' },
-          { num: stats.high,     label: 'High priority',color: '#f25c6e' },
-        ].map(({ num, label, color }) => (
-          <div key={label} className="flex-1 bg-[#17171e] border border-[#2e2e3a] rounded-xl px-4 py-3">
-            <div className="text-2xl font-bold font-[Syne,sans-serif] leading-none" style={{ color }}>{num}</div>
-            <div className="text-xs text-[#9090a8] mt-1">{label}</div>
+    <div
+      draggable
+      onDragStart={e => onDragStart(e, task)}
+      onDragEnd={onDragEnd}
+      onClick={() => onClick(task)}
+      style={{
+        background: "var(--color-background-primary)",
+        border: "0.5px solid var(--color-border-tertiary)",
+        borderRadius: "var(--border-radius-md)",
+        padding: "10px 12px",
+        marginBottom: 8,
+        cursor: "grab",
+        userSelect: "none",
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 8 }}>
+        {task.title}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        {task.tag && (
+          <span style={{
+            fontSize: 11, padding: "2px 7px", borderRadius: 10,
+            fontWeight: 500, background: tag.bg, color: tag.tc,
+          }}>
+            {task.tag}
+          </span>
+        )}
+        {task.due_date && (
+          <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+            {new Date(task.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+          </span>
+        )}
+        {task.assignee && (
+          <div style={{
+            width: 22, height: 22, borderRadius: "50%",
+            background: av.bg, color: av.tc,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10, fontWeight: 500, marginLeft: "auto", flexShrink: 0,
+          }}>
+            {initials(task.assignee)}
           </div>
-        ))}
+        )}
       </div>
-
-      {/* ── Filter / search bar ── */}
-      <div className="flex items-center gap-2 px-6 py-3">
-        {PRIORITY_FILTER_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => setFilter(opt.value)}
-            className={`px-3 py-1 rounded-full text-[12.5px] border transition-colors
-              ${filter === opt.value
-                ? 'bg-violet-500/15 border-violet-500 text-violet-300'
-                : 'border-[#2e2e3a] text-[#9090a8] hover:border-[#3a3a48] hover:text-white bg-transparent'}
-            `}
-          >
-            {opt.label}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-2 bg-[#17171e] border border-[#2e2e3a] rounded-lg px-3 py-1.5 min-w-[180px]">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <circle cx="5" cy="5" r="4" stroke="#5a5a72" strokeWidth="1.3"/>
-            <path d="M8.5 8.5l2 2" stroke="#5a5a72" strokeWidth="1.3" strokeLinecap="round"/>
-          </svg>
-          <input
-            type="text"
-            className="bg-transparent border-none outline-none text-[13px] text-white placeholder:text-[#5a5a72] w-full"
-            placeholder="Search tasks…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <button
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors"
-          onClick={() => openCreate()}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M6 1v10M1 6h10" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          New task
-        </button>
-      </div>
-
-      {/* ── Kanban board ── */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex gap-3.5 px-6 pb-6 overflow-x-auto flex-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#2e2e3a transparent' }}>
-          {COLUMNS.map((colId) => (
-            <Column
-              key={colId}
-              id={colId}
-              tasks={tasksByCol[colId]}
-              onEdit={openEdit}
-              onDelete={handleDelete}
-              onAddTask={openCreate}
-            />
-          ))}
-        </div>
-
-        {/* Drag overlay — ghost card while dragging */}
-        <DragOverlay>
-          {activeTask && (
-            <div className="rotate-1 scale-105 shadow-2xl shadow-violet-500/20">
-              <TaskCard task={activeTask} onEdit={() => {}} onDelete={() => {}} />
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
-
-      {/* ── Task modal ── */}
-      <TaskModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleSave}
-        initialTask={editingTask}
-        defaultStatus={defaultStatus}
-      />
-    </>
+    </div>
   );
 }
 
+// ─── Column ───────────────────────────────────────────────────────────────────
+function Column({ col, tasks, onDragStart, onDragEnd, onDrop, onDragOver, onDragLeave, isDragOver, onCardClick, onAddTask }) {
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDrop={e => onDrop(e, col.key)}
+      onDragLeave={onDragLeave}
+      style={{
+        background: isDragOver ? "var(--color-background-info)" : "var(--color-background-secondary)",
+        borderRadius: "var(--border-radius-lg)",
+        padding: 10,
+        minHeight: 200,
+        transition: "background .15s",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, padding: "0 2px" }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>{col.label}</span>
+        <span style={{
+          fontSize: 11, padding: "1px 7px", borderRadius: 10,
+          background: "var(--color-background-primary)",
+          border: "0.5px solid var(--color-border-tertiary)",
+          color: "var(--color-text-secondary)",
+        }}>
+          {tasks.length}
+        </span>
+      </div>
+
+      {/* cards */}
+      <div style={{ flex: 1 }}>
+        {tasks.map(task => (
+          <TaskCard
+            key={task.id}
+            task={task}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onClick={onCardClick}
+          />
+        ))}
+      </div>
+
+      {/* add task */}
+      <button
+        onClick={() => onAddTask(col.key)}
+        style={{
+          width: "100%", marginTop: 8, padding: "6px 0",
+          fontSize: 12, color: "var(--color-text-secondary)",
+          background: "transparent", border: "0.5px dashed var(--color-border-secondary)",
+          borderRadius: "var(--border-radius-md)", cursor: "pointer",
+        }}
+      >
+        + Add task
+      </button>
+    </div>
+  );
+}
+
+// ─── Board ────────────────────────────────────────────────────────────────────
+export default function Board() {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [dragOverCol, setDragOverCol] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterTag, setFilterTag] = useState("all");
+  const [modalTask, setModalTask] = useState(null); // null | task | {status} for new
+  const draggingId = useRef(null);
+
+  // ── fetch ──
+  useEffect(() => {
+    const projectId = localStorage.getItem("activeProject");
+    const url = projectId ? `/tasks?project_id=${projectId}` : "/tasks";
+    api.get(url)
+      .then(res => {
+        const raw = Array.isArray(res.data) ? res.data : res.data.tasks || [];
+        setTasks(raw.map(t => ({ ...t, status: normalizeStatus(t.status) })));
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // ── drag handlers ──
+  const handleDragStart = useCallback((e, task) => {
+    draggingId.current = task.id;
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    draggingId.current = null;
+    setDragOverCol(null);
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleDrop = useCallback(async (e, newStatus) => {
+    e.preventDefault();
+    setDragOverCol(null);
+    const id = draggingId.current;
+    if (!id) return;
+
+    const task = tasks.find(t => t.id === id);
+    if (!task || task.status === newStatus) return;
+
+    // optimistic update
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+
+    try {
+      await api.patch(`/tasks/${id}`, { status: newStatus });
+    } catch {
+      // revert on failure
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: task.status } : t));
+    }
+  }, [tasks]);
+
+  // ── modal handlers ──
+  const handleSaveTask = useCallback(async (data) => {
+    if (data.id) {
+      const res = await api.put(`/tasks/${data.id}`, data);
+      setTasks(prev => prev.map(t => t.id === data.id ? { ...t, ...res.data } : t));
+    } else {
+      const res = await api.post("/tasks", data);
+      setTasks(prev => [...prev, { ...res.data, status: normalizeStatus(res.data.status) }]);
+    }
+    // no setModalTask(null) here — TaskModal calls onClose() itself after saving
+  }, []);
+
+  const handleDeleteTask = useCallback(async (id) => {
+    try {
+      await api.delete(`/tasks/${id}`);
+      setTasks(prev => prev.filter(t => t.id !== id));
+    } catch (err) {
+      console.error("Delete task failed:", err);
+    }
+    setModalTask(null);
+  }, []);
+
+  // ── filtered tasks ──
+  const allTags = [...new Set(tasks.map(t => t.tag).filter(Boolean))];
+
+  const filtered = tasks.filter(t => {
+    const matchSearch = !search || t.title?.toLowerCase().includes(search.toLowerCase());
+    const matchTag = filterTag === "all" || t.tag === filterTag;
+    return matchSearch && matchTag;
+  });
+
+  // ── render ──
+  return (
+    <div style={{ padding: "24px 28px", fontFamily: "inherit" }}>
+
+      {/* toolbar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1.25rem", flexWrap: "wrap" }}>
+        <h1 style={{ fontSize: 20, fontWeight: 500, color: "var(--color-text-primary)", flex: 1 }}>Board</h1>
+
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search tasks…"
+          style={{
+            padding: "6px 12px", fontSize: 13, width: 200,
+            border: "0.5px solid var(--color-border-secondary)",
+            borderRadius: "var(--border-radius-md)",
+            background: "var(--color-background-primary)",
+            color: "var(--color-text-primary)",
+          }}
+        />
+
+        {/* tag filter */}
+        <div style={{ display: "flex", gap: 6 }}>
+          {["all", ...allTags].map(tag => (
+            <button key={tag} onClick={() => setFilterTag(tag)} style={{
+              padding: "5px 11px", fontSize: 12, cursor: "pointer",
+              border: "0.5px solid var(--color-border-secondary)",
+              borderRadius: "var(--border-radius-md)",
+              background: filterTag === tag ? "var(--color-background-secondary)" : "transparent",
+              fontWeight: filterTag === tag ? 500 : 400,
+              color: filterTag === tag ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+            }}>
+              {tag === "all" ? "All" : tag}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading && (
+        <div style={{ textAlign: "center", padding: "3rem", color: "var(--color-text-secondary)" }}>Loading…</div>
+      )}
+      {error && (
+        <div style={{ padding: "1rem", borderRadius: "var(--border-radius-md)", background: "var(--color-background-danger)", color: "var(--color-text-danger)", fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      {/* board */}
+      {!loading && !error && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, alignItems: "start" }}>
+          {COLUMNS.map(col => (
+            <Column
+              key={col.key}
+              col={col}
+              tasks={filtered.filter(t => t.status === col.key)}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onDragLeave={() => setDragOverCol(null)}
+              isDragOver={dragOverCol === col.key}
+              onCardClick={task => setModalTask(task)}
+              onAddTask={status => setModalTask({ status })}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* task modal — reuse your existing one */}
+      {modalTask !== null && (
+        <TaskModal
+          isOpen={modalTask !== null}
+          initialTask={modalTask?.id ? modalTask : null}
+          defaultStatus={modalTask?.status || 'todo'}
+          onSave={handleSaveTask}
+          onClose={() => setModalTask(null)}
+        />
+      )}
+    </div>
+  );
+}

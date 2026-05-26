@@ -11,7 +11,7 @@ export default function Sidebar({ activeNav = 'board', onNavChange, projects = [
       <div className="p-3 border-b border-[#1e1e2a]">
         <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-600/15 border border-violet-500/20 text-violet-300 text-[13px] font-medium hover:bg-violet-600/25 transition-colors">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           New Project
         </button>
@@ -20,10 +20,15 @@ export default function Sidebar({ activeNav = 'board', onNavChange, projects = [
       {/* Nav */}
       <div className="px-2 py-3">
         <SectionLabel>Workspace</SectionLabel>
-        <NavItem id="board"    label="Dashboard" icon={<GridIcon />}  active={activeNav === 'board'}    onClick={() => onNavChange?.('board')} />
-        <NavItem id="mytasks"  label="Tasks"      icon={<ListIcon />}  active={activeNav === 'mytasks'}  onClick={() => onNavChange?.('mytasks')} badge="5" />
-        <NavItem id="timeline" label="Timeline"   icon={<TimeIcon />}  active={activeNav === 'timeline'} onClick={() => onNavChange?.('timeline')} />
-        <NavItem id="reports"  label="Reports"    icon={<ChartIcon />} active={activeNav === 'reports'}  onClick={() => onNavChange?.('reports')} />
+        <NavItem id="board" label="Dashboard" icon={<GridIcon />} active={activeNav === 'board'} onClick={() => onNavChange?.('board')} />
+        <NavItem id="mytasks" label="Tasks" icon={<ListIcon />} active={activeNav === 'mytasks'} onClick={() => onNavChange?.('mytasks')} badge="5" />
+        <NavItem id="timeline" label="Timeline" icon={<TimeIcon />} active={activeNav === 'timeline'} onClick={() => onNavChange?.('timeline')} />
+        <NavItem id="reports" label="Reports" icon={<ChartIcon />} active={activeNav === 'reports'} onClick={() => onNavChange?.('reports')} />
+        <NavLink to="/timeline">
+          <NavLink to="/reports">Reports</NavLink>
+          <ChartGanttIcon />
+          Timeline
+        </NavLink>
       </div>
 
       {/* Projects */}
@@ -68,7 +73,7 @@ export default function Sidebar({ activeNav = 'board', onNavChange, projects = [
           </div>
           <button onClick={logout} className="opacity-0 group-hover:opacity-100 transition-opacity text-[#5a5a72] hover:text-red-400 p-1" title="Sign out">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M4.5 2H2v8h2.5M8 8.5l3-3-3-3M11 5.5H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M4.5 2H2v8h2.5M8 8.5l3-3-3-3M11 5.5H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         </div>
@@ -99,7 +104,7 @@ function NavItem({ id, label, icon, active, onClick, badge }) {
   );
 }
 
-const GridIcon = () => (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor"/><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor"/><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor"/><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor"/></svg>);
-const ListIcon = () => (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 4h10M2 7.5h7M2 11h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>);
-const TimeIcon = () => (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3"/><path d="M7 4.5V7.5l2 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg>);
-const ChartIcon = () => (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 11l3-4 3 2 4-6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>);
+const GridIcon = () => (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="8" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="1" y="8" width="5" height="5" rx="1" fill="currentColor" /><rect x="8" y="8" width="5" height="5" rx="1" fill="currentColor" /></svg>);
+const ListIcon = () => (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 4h10M2 7.5h7M2 11h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>);
+const TimeIcon = () => (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.3" /><path d="M7 4.5V7.5l2 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>);
+const ChartIcon = () => (<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 11l3-4 3 2 4-6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>);

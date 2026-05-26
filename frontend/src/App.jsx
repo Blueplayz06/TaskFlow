@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { getProjects } from './api/client';
-import Board    from './components/Board';
-import Sidebar  from './components/Sidebar';
-import Topbar   from './components/Topbar';
-import MyTasks  from './pages/MyTasks';
-import Login    from './pages/Login';
+import Board from './components/Board';
+import Sidebar from './components/Sidebar';
+import Topbar from './components/Topbar';
+import MyTasks from './pages/MyTasks';
+import Login from './pages/Login';
 import Register from './pages/Register';
+import Timeline from "./pages/Timeline";
+import Reports from "./pages/Reports";
+
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -21,11 +24,11 @@ function PrivateRoute({ children }) {
 
 function AppShell() {
   const { user } = useAuth();
-  const [activeNav, setActiveNav]     = useState('board');
-  const [projects, setProjects]       = useState([]);
-  const [projectId, setProjectId]     = useState(null);
+  const [activeNav, setActiveNav] = useState('board');
+  const [projects, setProjects] = useState([]);
+  const [projectId, setProjectId] = useState(null);
   const [projectName, setProjectName] = useState('My Project');
-  const [loading, setLoading]         = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getProjects()
@@ -36,7 +39,7 @@ function AppShell() {
           setProjectName(res.data[0].name);
         }
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [user]);
 
@@ -92,9 +95,11 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login"    element={<Login />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/*"        element={<PrivateRoute><AppShell /></PrivateRoute>} />
+          <Route path="/*" element={<PrivateRoute><AppShell /></PrivateRoute>} />
+          <Route path="/timeline" element={<Timeline />} />
+          <Route path="/reports" element={<Reports />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
